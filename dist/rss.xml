@@ -1,4 +1,28 @@
-<?xml version="1.0" encoding="UTF-8"?><rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/"><channel><title>minhi1</title><description>blogs</description><link>https://minhi1.github.io/</link><language>en</language><item><title>Markdown Extended Features</title><link>https://minhi1.github.io/minhi1-blogs/posts/markdown-extended/</link><guid isPermaLink="true">https://minhi1.github.io/minhi1-blogs/posts/markdown-extended/</guid><description>Read more about Markdown features in Fuwari</description><pubDate>Wed, 01 May 2024 00:00:00 GMT</pubDate><content:encoded>&lt;h2&gt;GitHub Repository Cards&lt;/h2&gt;
+<?xml version="1.0" encoding="UTF-8"?><rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/"><channel><title>minhi1</title><description>blogs</description><link>https://minhi1.github.io/</link><language>en</language><item><title>DreamHack - [file-csp-1 challenge writeup]</title><link>https://minhi1.github.io/minhi1-blogs/posts/dreamhack/level-2/file-csp-1/</link><guid isPermaLink="true">https://minhi1.github.io/minhi1-blogs/posts/dreamhack/level-2/file-csp-1/</guid><description>Writeup for the file-csp-1 challenge (level 2)</description><pubDate>Thu, 20 Nov 2025 00:00:00 GMT</pubDate><content:encoded>&lt;h2&gt;Goal&lt;/h2&gt;
+&lt;p&gt;Write a CSP header that satifies the conditions to obtain the flag.&lt;/p&gt;
+&lt;h2&gt;Solution&lt;/h2&gt;
+&lt;p&gt;The goal of this problem is to block &lt;code&gt;a()&lt;/code&gt;, &lt;code&gt;b()&lt;/code&gt; and allow &lt;code&gt;c()&lt;/code&gt;, &lt;code&gt;$(document)&lt;/code&gt; (also the script to load jquery).&lt;/p&gt;
+&lt;p&gt;The query load script can be allowed easily by using its sha256 hash value.&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;script-src &apos;sha256-pasqAKBDmFT4eHoN2ndd6lN370kFiGUFyTiUHWhU7k8=&apos; 
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;But the &lt;code&gt;b()&lt;/code&gt; and &lt;code&gt;c()&lt;/code&gt; has the same nonce value, so we need some ways to distinguish it.
+I read the CSP document, and found &lt;a href=&quot;https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CSP#strict_csp&quot;&gt;this&lt;/a&gt;. Turns out, we can also use hash-based strict CSP like this &lt;code&gt;script-src &apos;sha256-{HASHED_SCRIPT}&apos;&lt;/code&gt;. This will be different between &lt;code&gt;b()&lt;/code&gt; and &lt;code&gt;c()&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;To get the sha256 value of the final script tag, we must specify exactly the code (including \n, \t), but not including the script tag.
+To do so, we can open the console and type the following:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;document.querySelector(&apos;script[nonce=&quot;i_am_super_random&quot;]&apos;).textContent;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;The output is:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;\n\t\tfunction c() { return &apos;c&apos;; }\n\t\tdocument.write(&apos;c: allow me!&amp;lt;br&amp;gt;&apos;);\n\t\ttry { $(document); document.write(&apos;jquery: allow me!&amp;lt;br&amp;gt;&apos;); } catch (e) {  }\n\t
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Then we can use &lt;a href=&quot;https://centralcsp.com/features/hashes&quot;&gt;CSP Hash&lt;/a&gt;, paste this code in (remember to replace \n with newline, \t with tab) and we can get the following hash.&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;&apos;sha256-l1OSKODPRVBa1/91J7WfPisrJ6WCxCRnKFzXaOkpsY4=&apos;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;So our payload will be:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;script-src &apos;sha256-pasqAKBDmFT4eHoN2ndd6lN370kFiGUFyTiUHWhU7k8=&apos; &apos;sha256-l1OSKODPRVBa1/91J7WfPisrJ6WCxCRnKFzXaOkpsY4=&apos;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Enter this to &lt;code&gt;/verify&lt;/code&gt; and we obtain the flag.&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;FLAG: DH{csp-is-good_XD}&lt;/code&gt;&lt;/p&gt;
+</content:encoded></item><item><title>Markdown Extended Features</title><link>https://minhi1.github.io/minhi1-blogs/posts/markdown-extended/</link><guid isPermaLink="true">https://minhi1.github.io/minhi1-blogs/posts/markdown-extended/</guid><description>Read more about Markdown features in Fuwari</description><pubDate>Wed, 01 May 2024 00:00:00 GMT</pubDate><content:encoded>&lt;h2&gt;GitHub Repository Cards&lt;/h2&gt;
 &lt;p&gt;You can add dynamic cards that link to GitHub repositories, on page load, the repository information is pulled from the GitHub API.&lt;/p&gt;
 &lt;p&gt;::github{repo=&quot;Fabrizz/MMM-OnSpotify&quot;}&lt;/p&gt;
 &lt;p&gt;Create a GitHub repository card with the code &lt;code&gt;::github{repo=&quot;&amp;lt;owner&amp;gt;/&amp;lt;repo&amp;gt;&quot;}&lt;/code&gt;.&lt;/p&gt;
