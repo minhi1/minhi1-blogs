@@ -1,4 +1,50 @@
-<?xml version="1.0" encoding="UTF-8"?><rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/"><channel><title>minhi1</title><description>blogs</description><link>https://minhi1.github.io/</link><language>en</language><item><title>DreamHack - [file-csp-1 challenge writeup]</title><link>https://minhi1.github.io/minhi1-blogs/posts/dreamhack/level-2/file-csp-1/</link><guid isPermaLink="true">https://minhi1.github.io/minhi1-blogs/posts/dreamhack/level-2/file-csp-1/</guid><description>Writeup for the file-csp-1 challenge (level 2)</description><pubDate>Thu, 20 Nov 2025 00:00:00 GMT</pubDate><content:encoded>&lt;h2&gt;Goal&lt;/h2&gt;
+<?xml version="1.0" encoding="UTF-8"?><rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/"><channel><title>minhi1</title><description>blogs</description><link>https://minhi1.github.io/</link><language>en</language><item><title>DreamHack - [phpMyRedis challenge writeup]</title><link>https://minhi1.github.io/minhi1-blogs/posts/dreamhack/level-3/phpmyredis/</link><guid isPermaLink="true">https://minhi1.github.io/minhi1-blogs/posts/dreamhack/level-3/phpmyredis/</guid><description>Writeup for the phpMyRedis challenge (level 3)</description><pubDate>Tue, 25 Nov 2025 00:00:00 GMT</pubDate><content:encoded>&lt;h1&gt;Browse the app functionalities&lt;/h1&gt;
+&lt;p&gt;The core files are &lt;code&gt;index.php&lt;/code&gt; and &lt;code&gt;config.php&lt;/code&gt;.&lt;/p&gt;
+&lt;h2&gt;index.php&lt;/h2&gt;
+&lt;p&gt;This file allows to type in the command, save the result, and store the command history.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Redis&lt;/strong&gt; runs the &lt;code&gt;$_POST[&apos;cmd&apos;]&lt;/code&gt; command using &lt;code&gt;$redis-&amp;gt;eval()&lt;/code&gt;, then saves the command in &lt;code&gt;$_SESSION[history_{cnt}]&lt;/code&gt;. It saves the command result in file &lt;em&gt;./data/{session_id}&lt;/em&gt;, with the data as&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;&amp;gt; {cmd}
+--------------------------------
+{result}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;==Untrusted data==&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;code&gt;$_POST[&apos;cmd&apos;]&lt;/code&gt;: This flows into &lt;code&gt;$redis-&amp;gt;eval()&lt;/code&gt;, which executes a LUA script serverside. &lt;a href=&quot;https://github.com/phpredis/phpredis?tab=readme-ov-file#eval&quot;&gt;read here&lt;/a&gt;&lt;/li&gt;
+&lt;/ol&gt;
+&lt;h2&gt;config.php&lt;/h2&gt;
+&lt;p&gt;This file allows us to get or set a key. The form includes the &lt;code&gt;key&lt;/code&gt; and &lt;code&gt;value&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;If option is GET (&lt;code&gt;$_POST[&apos;option&apos;] == &apos;GET&apos;&lt;/code&gt;), it gets the Redis server configuration parameters and returns an associative array &amp;lt;br&amp;gt; {key(s) $\rightarrow$ value(s)}.
+If option is SET (&lt;code&gt;$_POST[&apos;option&apos;] == &apos;SET&apos;&lt;/code&gt;), it sets the Redis server configuration parameters and returns  &lt;em&gt;bool&lt;/em&gt;.&lt;/p&gt;
+&lt;p&gt;Then it prints out the result.
+==Untrusted data==&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;code&gt;$_POST[&apos;option&apos;]&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;$_POST[&apos;key&apos;]&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;$_POST[&apos;value&apos;]&lt;/code&gt;&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;All these 3 untrusted data flow into the &lt;code&gt;$redis-&amp;gt;config()&lt;/code&gt;. &lt;a href=&quot;https://github.com/phpredis/phpredis?tab=readme-ov-file#config&quot;&gt;read here&lt;/a&gt;&lt;/p&gt;
+&lt;h1&gt;My thinking flow&lt;/h1&gt;
+&lt;p&gt;I don&apos;t know much about Redis, so let&apos;s gather some information to know what I&apos;m gonna do.
+Read the Dockerfile, it states that the flag is in the root directory and it is a binary file, thus, we have to execute it. This probably hints that we need to exploit the &lt;em&gt;Command Injection&lt;/em&gt; and &lt;em&gt;Remote Code Execution&lt;/em&gt; vulnerablity. Indeed, we do have the untrusted data &lt;code&gt;$_POST[&apos;cmd&apos;]&lt;/code&gt; flows into an unsafe method &lt;code&gt;eval()&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;The &lt;code&gt;eval()&lt;/code&gt; in redis executes LUA script. As I search online, Redis LUA does not allow to run shell command. It only exposes &lt;code&gt;redis.call()&lt;/code&gt;, basic math, table, and string operations. But I don&apos;t think I will stop here, I have some suspicious that there might be some ways to actually execute the OS command.&lt;/p&gt;
+&lt;p&gt;Read its &lt;a href=&quot;https://redis.io/docs/latest/develop/programmability/lua-api/&quot;&gt;document&lt;/a&gt;, the LUA scripts are runned in a sandboxed context and can only access specific Lua packages.&lt;/p&gt;
+&lt;p&gt;I went on Google and searched &quot;Redis LUA escape sandbox CVE&quot;, and found this url https://www.ubercomp.com/posts/2022-01-20_redis_on_debian_rce, which explains the &lt;strong&gt;CVE-2022-0543&lt;/strong&gt;.&lt;/p&gt;
+&lt;p&gt;This url stated that we can escape the sandbox with this payload.&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;eval &apos;local os_l = package.loadlib(&quot;/usr/lib/x86_64-linux-gnu/liblua5.1.so&quot;, &quot;luaopen_os&quot;); local os = os_l(); os.execute(&quot;touch /tmp/redis_poc&quot;); return 0&apos;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;blockquote&gt;
+&lt;p&gt;Actually, the correct packet must be /usr/lib/x86_64-linux-gnu/liblua5.1.so.0, and the better lib to use is luaopen_io, because it prints the result to stdout. &lt;code&gt;os.execute()&lt;/code&gt; only returns exit code.&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;So I try with payload&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;local io_l = package.loadlib(&quot;/usr/lib/x86_64-linux-gnu/liblua5.1.so.0&quot;, &quot;luaopen_io&quot;); 
+local io = io_l(); 
+local f = io.popen(&quot;/flag&quot;, &quot;r&quot;); 
+local res = f:read(&quot;*a&quot;); 
+f:close(); 
+return res
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;And we get the flag.&lt;/p&gt;
+</content:encoded></item><item><title>DreamHack - [file-csp-1 challenge writeup]</title><link>https://minhi1.github.io/minhi1-blogs/posts/dreamhack/level-2/file-csp-1/</link><guid isPermaLink="true">https://minhi1.github.io/minhi1-blogs/posts/dreamhack/level-2/file-csp-1/</guid><description>Writeup for the file-csp-1 challenge (level 2)</description><pubDate>Thu, 20 Nov 2025 00:00:00 GMT</pubDate><content:encoded>&lt;h2&gt;Goal&lt;/h2&gt;
 &lt;p&gt;Write a CSP header that satifies the conditions to obtain the flag.&lt;/p&gt;
 &lt;h2&gt;Solution&lt;/h2&gt;
 &lt;p&gt;The goal of this problem is to block &lt;code&gt;a()&lt;/code&gt;, &lt;code&gt;b()&lt;/code&gt; and allow &lt;code&gt;c()&lt;/code&gt;, &lt;code&gt;$(document)&lt;/code&gt; (also the script to load jquery).&lt;/p&gt;
