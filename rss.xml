@@ -3,7 +3,7 @@ That might not trigger the CSP header, which can eventually let us execute Javas
 &lt;p&gt;Send a comment payload like below.&lt;/p&gt;
 &lt;pre&gt;&lt;code&gt;comment = lol&amp;lt;img src=1 onerror=alert(1)&amp;gt;
 &lt;/code&gt;&lt;/pre&gt;
-&lt;p&gt;However, no alert is popped up. After searching on Google, I know that it is due to &lt;strong&gt;PHP Output Buffering&lt;/strong&gt; (&lt;a href=&quot;link&quot;&gt;https://stackoverflow.com/questions/2832010/what-is-output-buffering-in-php&lt;/a&gt;) behaviour. If you read this line of code in &lt;code&gt;Dockerfile&lt;/code&gt;.&lt;/p&gt;
+&lt;p&gt;However, no alert is popped up. After searching on Google, I know that it is due to &lt;strong&gt;PHP Output Buffering&lt;/strong&gt; (&lt;a href=&quot;https://stackoverflow.com/questions/2832010/what-is-output-buffering-in-php&quot;&gt;link&lt;/a&gt;) behaviour. If you read this line of code in &lt;code&gt;Dockerfile&lt;/code&gt;.&lt;/p&gt;
 &lt;pre&gt;&lt;code&gt;RUN sed -i &apos;215s/4096/8192/&apos; /etc/php/7.4/fpm/php.ini
 &lt;/code&gt;&lt;/pre&gt;
 &lt;p&gt;It edits the PHP configuration line, particularly, at line 215, change 4096 to 8192. This means change the output buffering size from 4096 bytes to 8192 bytes.&lt;/p&gt;
